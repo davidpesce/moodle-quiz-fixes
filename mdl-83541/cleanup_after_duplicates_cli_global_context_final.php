@@ -54,7 +54,9 @@ function is_question_safe_to_delete($questionid) {
     $result = ['safe' => true, 'message' => ''];
     
     // Check 1: Does it have attempts?
+    
     $attemptcount = $DB->count_records('question_attempts', ['questionid' => $questionid]);
+    //cli_writeln('Check 1: Does it have attempts: ' . $attemptcount);
     if ($attemptcount > 0) {
         return ['safe' => false, 'message' => "Question has $attemptcount attempts"];
     }
@@ -62,6 +64,7 @@ function is_question_safe_to_delete($questionid) {
     // Check 2: Is it included in any quiz? (Moodle 4.5.2 approach)
     // First check if quiz_slots exists (should exist in 4.5.2)
     if ($DB->get_manager()->table_exists('quiz_slots')) {
+        //cli_writeln('Check 2: Is it included in any quiz?');
         try {
             // For Moodle 4.x, quiz_slots should have a reference column but it varies
             // First, check the schema to find the appropriate column
@@ -69,6 +72,7 @@ function is_question_safe_to_delete($questionid) {
             
             // Different versions use different columns
             if (isset($tableColumns['questionid'])) {
+                //cli_writeln('modern approach');
                 // Modern approach
                 $quizCount = $DB->count_records('quiz_slots', ['questionid' => $questionid]);
                 if ($quizCount > 0) {
@@ -76,16 +80,18 @@ function is_question_safe_to_delete($questionid) {
                 }
             } else if (isset($tableColumns['questionid'])) {
                 // Alternate column name that might be used
+                //cli_writeln('alternate approach');
                 $quizCount = $DB->count_records('quiz_slots', ['questionid' => $questionid]);
                 if ($quizCount > 0) {
                     return ['safe' => false, 'message' => "Question is used in $quizCount quiz(zes)"];
                 }
             } else {
+                //cli_writeln('failover approach');
                 // If we can't determine the column, try a more direct approach - check if the question is associated with any quiz
                 $sql = "SELECT COUNT(DISTINCT qs.quizid) 
                         FROM {quiz_slots} qs 
                         WHERE qs.id IN (
-                            SELECT qsr.slotid 
+                            SELECT qsr.itemid 
                             FROM {question_references} qsr
                             WHERE qsr.questionbankentryid IN (
                                 SELECT qv.questionbankentryid
@@ -95,6 +101,7 @@ function is_question_safe_to_delete($questionid) {
                         )";
                 
                 $quizCount = $DB->count_records_sql($sql, ['questionid' => $questionid]);
+                //cli_writeln('quiz count: ' . $quizCount);
                 if ($quizCount > 0) {
                     return ['safe' => false, 'message' => "Question is used in $quizCount quiz(zes)"];
                 }
@@ -108,6 +115,7 @@ function is_question_safe_to_delete($questionid) {
     // Check 3: Is it a random question? (these are special and can cause issues)
     try {
         $question = $DB->get_record('question', ['id' => $questionid]);
+        //cli_writeln('Check 3: Is it a random question?: ' . $question->qtype);
         if ($question && $question->qtype === 'random') {
             return ['safe' => false, 'message' => "Question is a random question and should not be deleted directly"];
         }
@@ -147,18 +155,18 @@ try {
             LEFT JOIN 
                 {course} c ON (ctx.contextlevel = 50 AND ctx.instanceid = c.id)
             WHERE
-                q.qtype = 'matrix' AND
                 (q.name LIKE '%(duplicate %)'
                 AND q.stamp LIKE 'dup%.%')
             ORDER BY
-                c.id, q.name
-            LIMIT {$limit} OFFSET {$offset}";
-    
-    //if ($limit > 0) {
-        //$renamedQuestions = $DB->get_records_sql($sql, [], 0, $limit);
-    //} else {
+                c.id, q.name";
+
+    if ($limit > 0) {
+        $renamedQuestions = $DB->get_records_sql($sql, [], 0, $limit);
+    } else {
         $renamedQuestions = $DB->get_records_sql($sql);
-    //}
+    }
+
+    cli_writeln('Found: ' . count($renamedQuestions));
 } catch (Exception $e) {
     // Fall back to older Moodle structure
     try {

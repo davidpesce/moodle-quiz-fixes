@@ -6,7 +6,7 @@ require_once(__DIR__ . '/../config.php');
 require_once($CFG->libdir . '/clilib.php');
 require_once($CFG->libdir . '/adminlib.php');
 // Add this near the top of your script
-ini_set('memory_limit', '8G');  // Increase to 1GB or higher if needed
+ini_set('memory_limit', '12G');  // Increase to 1GB or higher if needed
 ini_set('display_errors', '1');
 ini_set('display_startup_errors', '1');
 error_reporting(E_ALL);
